@@ -143,14 +143,6 @@ public class DotNetRuntimeSDK : ModuleRules
             }
         }
 
-        // CoreCLR headers are backend-independent (the shared host headers include
-        // coreclrhost.h types); Mono headers are added inside the mono branches.
-        string coreClrInclude = Path.Combine(sdkRoot, "CoreCLR", "include");
-        if (Directory.Exists(coreClrInclude))
-        {
-            PublicIncludePaths.Add(coreClrInclude);
-        }
-
         bool bUseMono = UnrealSharpRuntimeSelection.ShouldUseMono(Target);
 
         if (bUseMono)
@@ -431,6 +423,30 @@ public class DotNetRuntimeSDK : ModuleRules
         // on 10/iOS, CoreLib mismatch). See VerifyPayloadRuntimeMajor for the details.
         string contentPlatformKey = Target.Platform == UnrealTargetPlatform.Android ? "ANDROID" : "IOS";
         VerifyPayloadRuntimeMajor(payloadDir, contentPlatformKey);
+
+        // Host headers (coreclrhost.h / host_runtime_contract.h) are NOT stored in git:
+        // CopyCoreClrSDKFromSrc.sh extracts them from the pinned dotnet/runtime source
+        // into the payload's include/, and CI artifacts carry it. coreclrhost.h is only
+        // compiled on mobile CoreCLR targets (CSDotNetRuntimeHost.h guards); desktop
+        // uses the plugin's own hostfxr headers from Managed/DotNetRuntime/inc.
+        string payloadInclude = Path.Combine(payloadDir, "include");
+        string legacyInclude = Path.Combine(sdkRoot, "CoreCLR", "include");
+        if (Directory.Exists(payloadInclude))
+        {
+            PublicIncludePaths.Add(payloadInclude);
+        }
+        else if (Directory.Exists(legacyInclude))
+        {
+            Logger.LogWarning("DotNetRuntimeSDK: using legacy {0}; regenerate the payload so include/ ships inside it.", legacyInclude);
+            PublicIncludePaths.Add(legacyInclude);
+        }
+        else
+        {
+            throw new BuildException(
+                $"CoreCLR host headers not found. Expected '{payloadInclude}' (inside the payload) " +
+                $"or '{legacyInclude}'. Rebuild the payload with CopyCoreClrSDKFromSrc.sh, which " +
+                "extracts them from the pinned dotnet/runtime source.");
+        }
 
         if (Directory.Exists(bclRuntimeDir))
         {

@@ -150,7 +150,21 @@ if [[ ! -d "$RUNTIME_PACK_MANAGED" ]]; then
 fi
 
 rm -rf "$DEST"
-mkdir -p "$DEST/lib" "$DEST/runtime"
+mkdir -p "$DEST/lib" "$DEST/runtime" "$DEST/include"
+
+# Host headers, extracted from the pinned dotnet/runtime source (never stored in git):
+#   coreclrhost.h          src/coreclr/hosts/inc
+#   host_runtime_contract.h src/native/corehost
+# The mobile host compiles against them (coreclrhost.h is only included on
+# (ANDROID||IOS) && !MONO); desktop uses the plugin's own hostfxr headers.
+for HDR in "src/coreclr/hosts/inc/coreclrhost.h" "src/native/corehost/host_runtime_contract.h"; do
+    if [[ -f "$DOTNET_SRC/$HDR" ]]; then
+        cp "$DOTNET_SRC/$HDR" "$DEST/include/"
+        echo "  include/$(basename "$HDR")"
+    else
+        echo "Warning: $HDR not found in $DOTNET_SRC - payload lacks host headers" >&2
+    fi
+done
 
 # ── 1. Native runtime engines → lib/ ─────────────────────────────────────────
 # Only what the host loads.
