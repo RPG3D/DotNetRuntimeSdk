@@ -1,8 +1,11 @@
 name: Package DotNetRuntimeSDK Release
 
-# Assembles a GitHub Release from the artifacts of a build-all run: one zip per
-# backend+platform, so consumers fetch only what they need (FetchRuntimeSDK.sh).
-# The release notes record the exact dotnet/runtime pins from DotNetRuntime.version.
+# Assembles a GitHub Release from a build-all run's artifacts as TWO zips
+# (download on demand, one per backend — mirrors the repository layout):
+#   MonoSDK-<version>-Release.zip     Mono/{Win64,Mac,Linux,Android,IOS,IOSSimulator}/...
+#   CoreClrSDK-<version>-Release.zip  CoreCLR/{Android,IOS,IOSSimulator}/...
+# Extract either zip over this SDK directory. The release notes record the exact
+# dotnet/runtime pins from DotNetRuntime.version.
 
 on:
   workflow_dispatch:
@@ -20,10 +23,6 @@ on:
 
 permissions:
   contents: write
-
-env:
-  MONO_TAG_HINT: "see DotNetRuntime.version MONO_SOURCE_TAG"
-  CLR_TAG_HINT: "see DotNetRuntime.version SOURCE_TAG"
 
 jobs:
   package:
@@ -46,19 +45,41 @@ jobs:
       - name: Download all build artifacts
         run: |
           gh run download "${{ steps.run.outputs.id }}" -R "$GITHUB_REPOSITORY" -D artifacts
-          mkdir -p package
         env:
           GH_TOKEN: ${{ github.token }}
 
-      - name: Zip per backend+platform
+      - name: Assemble backend trees
         run: |
-          cd artifacts
-          for DIR in */; do
-            NAME="${DIR%/}"
-            (cd "$DIR" && zip -X -y -q -r "../package/${NAME}.zip" .)
+          set -euo pipefail
+          mkdir -p package/Mono package/CoreCLR
+          # bash 3.2 safe: case mapping, no associative arrays.
+          for ART in artifacts/*/; do
+            NAME="$(basename "$ART")"
+            case "$NAME" in
+              MonoSDK-Linux-x64-*)              DEST="Mono/Linux/x64" ;;
+              MonoSDK-Windows-x64-*)            DEST="Mono/Win64/x64" ;;
+              MonoSDK-macOS-x64-*)              DEST="Mono/Mac/x64" ;;
+              MonoSDK-macOS-arm64-*)            DEST="Mono/Mac/arm64" ;;
+              MonoSDK-Android-arm64-*)          DEST="Mono/Android/arm64" ;;
+              MonoSDK-iOS-arm64-*)              DEST="Mono/IOS/arm64" ;;
+              MonoSDK-iOS-Simulator-arm64-*)    DEST="Mono/IOSSimulator/arm64" ;;
+              CoreClrSDK-Android-arm64-*)       DEST="CoreCLR/Android/arm64" ;;
+              CoreClrSDK-iOS-arm64-*)           DEST="CoreCLR/IOS/arm64" ;;
+              CoreClrSDK-iOS-Simulator-arm64-*) DEST="CoreCLR/IOSSimulator/arm64" ;;
+              *) echo "Unknown artifact: $NAME" >&2; exit 1 ;;
+            esac
+            mkdir -p "package/$DEST"
+            cp -R "$ART." "package/$DEST/"
+            echo "  $NAME -> $DEST"
           done
-          cd ..
-          ls -la package/
+
+      - name: Zip per backend
+        run: |
+          set -euo pipefail
+          cd package
+          zip -X -y -q -r "MonoSDK-${{ github.event.inputs.version }}-Release.zip" Mono
+          zip -X -y -q -r "CoreClrSDK-${{ github.event.inputs.version }}-Release.zip" CoreCLR
+          ls -la *.zip
 
       - name: Read pins for release notes
         id: pins
@@ -73,13 +94,15 @@ jobs:
           name: ${{ github.event.inputs.version }}
           body: |
             ## Contents
-            - Mono payloads (7 platforms) + CoreCLR payloads (3 mobile platforms)
+            - `MonoSDK-*-Release.zip` — Mono payloads (Win64, Mac x64/arm64, Linux, Android, iOS, iOS Simulator) + shared include/
+            - `CoreClrSDK-*-Release.zip` — CoreCLR payloads (Android, iOS, iOS Simulator) + host headers in each payload's include/
 
             ## Build Info
             Mono source: https://github.com/dotnet/runtime.git (${{ steps.pins.outputs.mono }})
             CoreCLR source: https://github.com/dotnet/runtime.git (${{ steps.pins.outputs.clr }})
             Build date: ${{ github.event.inputs.version }}
           files: |
-            package/*.zip
+            package/MonoSDK-${{ github.event.inputs.version }}-Release.zip
+            package/CoreClrSDK-${{ github.event.inputs.version }}-Release.zip
           draft: false
           prerelease: false
