@@ -108,7 +108,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: MonoSDK-${{ env.MONO_TAG }}-Linux-x64-${{ github.event.inputs.build_type || 'Debug' }}
+          name: MonoSDK-r${{ github.run_number }}-${{ env.MONO_TAG }}-Linux-x64-${{ github.event.inputs.build_type || 'Debug' }}
           path: Mono/Linux/x64/
           retention-days: 30
           if-no-files-found: error
@@ -139,7 +139,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: MonoSDK-${{ env.MONO_TAG }}-Windows-x64-${{ github.event.inputs.build_type || 'Debug' }}
+          name: MonoSDK-r${{ github.run_number }}-${{ env.MONO_TAG }}-Windows-x64-${{ github.event.inputs.build_type || 'Debug' }}
           path: Mono/Win64/x64/
           retention-days: 30
           if-no-files-found: error
@@ -167,7 +167,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: MonoSDK-${{ env.MONO_TAG }}-macOS-arm64-${{ github.event.inputs.build_type || 'Debug' }}
+          name: MonoSDK-r${{ github.run_number }}-${{ env.MONO_TAG }}-macOS-arm64-${{ github.event.inputs.build_type || 'Debug' }}
           path: Mono/Mac/arm64/
           retention-days: 30
           if-no-files-found: error
@@ -199,7 +199,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: MonoSDK-${{ env.MONO_TAG }}-macOS-x64-${{ github.event.inputs.build_type || 'Debug' }}
+          name: MonoSDK-r${{ github.run_number }}-${{ env.MONO_TAG }}-macOS-x64-${{ github.event.inputs.build_type || 'Debug' }}
           path: Mono/Mac/x64/
           retention-days: 30
           if-no-files-found: error
@@ -226,7 +226,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: MonoSDK-${{ env.MONO_TAG }}-iOS-arm64-${{ github.event.inputs.build_type || 'Debug' }}
+          name: MonoSDK-r${{ github.run_number }}-${{ env.MONO_TAG }}-iOS-arm64-${{ github.event.inputs.build_type || 'Debug' }}
           path: Mono/IOS/arm64/
           retention-days: 30
           if-no-files-found: error
@@ -255,7 +255,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: MonoSDK-${{ env.MONO_TAG }}-iOS-Simulator-arm64-${{ github.event.inputs.build_type || 'Debug' }}
+          name: MonoSDK-r${{ github.run_number }}-${{ env.MONO_TAG }}-iOS-Simulator-arm64-${{ github.event.inputs.build_type || 'Debug' }}
           path: Mono/IOSSimulator/arm64/
           retention-days: 30
           if-no-files-found: error
@@ -294,7 +294,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: MonoSDK-${{ env.MONO_TAG }}-Android-arm64-${{ github.event.inputs.build_type || 'Debug' }}
+          name: MonoSDK-r${{ github.run_number }}-${{ env.MONO_TAG }}-Android-arm64-${{ github.event.inputs.build_type || 'Debug' }}
           path: Mono/Android/arm64/
           retention-days: 30
           if-no-files-found: error
@@ -345,7 +345,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: CoreClrSDK-${{ env.CORECLR_TAG }}-Android-arm64-${{ github.event.inputs.build_type || 'Release' }}
+          name: CoreClrSDK-r${{ github.run_number }}-${{ env.CORECLR_TAG }}-Android-arm64-${{ github.event.inputs.build_type || 'Release' }}
           path: CoreCLR/Android/arm64/
           retention-days: 30
           if-no-files-found: error
@@ -382,7 +382,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: CoreClrSDK-${{ env.CORECLR_TAG }}-iOS-arm64-${{ github.event.inputs.build_type || 'Release' }}
+          name: CoreClrSDK-r${{ github.run_number }}-${{ env.CORECLR_TAG }}-iOS-arm64-${{ github.event.inputs.build_type || 'Release' }}
           path: CoreCLR/IOS/arm64/
           retention-days: 30
           if-no-files-found: error
@@ -419,7 +419,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: CoreClrSDK-${{ env.CORECLR_TAG }}-iOS-Simulator-arm64-${{ github.event.inputs.build_type || 'Release' }}
+          name: CoreClrSDK-r${{ github.run_number }}-${{ env.CORECLR_TAG }}-iOS-Simulator-arm64-${{ github.event.inputs.build_type || 'Release' }}
           path: CoreCLR/IOSSimulator/arm64/
           retention-days: 30
           if-no-files-found: error

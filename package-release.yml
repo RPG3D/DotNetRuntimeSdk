@@ -60,8 +60,10 @@ jobs:
             RUN_ID="$(gh run list -R "$GITHUB_REPOSITORY" -w build-all.yml -s success -L 1 --json databaseId --jq '.[0].databaseId')"
           fi
           HEAD_SHA="$(gh run view "$RUN_ID" -R "$GITHUB_REPOSITORY" --json headSha --jq '.headSha')"
+          RUN_NUM="$(gh run view "$RUN_ID" -R "$GITHUB_REPOSITORY" --json number --jq '.number')"
           echo "id=$RUN_ID" >> "$GITHUB_OUTPUT"
           echo "sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          echo "num=$RUN_NUM" >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -73,16 +75,16 @@ jobs:
           CLR="${{ steps.pins.outputs.clr }}"
           MISSING=""
           for NAME in \
-            "MonoSDK-${MONO}-Linux-x64-${BT}" \
-            "MonoSDK-${MONO}-Windows-x64-${BT}" \
-            "MonoSDK-${MONO}-macOS-x64-${BT}" \
-            "MonoSDK-${MONO}-macOS-arm64-${BT}" \
-            "MonoSDK-${MONO}-Android-arm64-${BT}" \
-            "MonoSDK-${MONO}-iOS-arm64-${BT}" \
-            "MonoSDK-${MONO}-iOS-Simulator-arm64-${BT}" \
-            "CoreClrSDK-${CLR}-Android-arm64-${BT}" \
-            "CoreClrSDK-${CLR}-iOS-arm64-${BT}" \
-            "CoreClrSDK-${CLR}-iOS-Simulator-arm64-${BT}"; do
+            "MonoSDK-r${RUN_NUM}-${MONO}-Linux-x64-${BT}" \
+            "MonoSDK-r${RUN_NUM}-${MONO}-Windows-x64-${BT}" \
+            "MonoSDK-r${RUN_NUM}-${MONO}-macOS-x64-${BT}" \
+            "MonoSDK-r${RUN_NUM}-${MONO}-macOS-arm64-${BT}" \
+            "MonoSDK-r${RUN_NUM}-${MONO}-Android-arm64-${BT}" \
+            "MonoSDK-r${RUN_NUM}-${MONO}-iOS-arm64-${BT}" \
+            "MonoSDK-r${RUN_NUM}-${MONO}-iOS-Simulator-arm64-${BT}" \
+            "CoreClrSDK-r${RUN_NUM}-${CLR}-Android-arm64-${BT}" \
+            "CoreClrSDK-r${RUN_NUM}-${CLR}-iOS-arm64-${BT}" \
+            "CoreClrSDK-r${RUN_NUM}-${CLR}-iOS-Simulator-arm64-${BT}"; do
             if ! gh run download "${{ steps.run.outputs.id }}" -R "$GITHUB_REPOSITORY" \
                  -n "$NAME" -D "artifacts/$NAME"; then
               MISSING="$MISSING $NAME"
@@ -108,16 +110,16 @@ jobs:
           for ART in artifacts/*/; do
             NAME="$(basename "$ART")"
             case "$NAME" in
-              "MonoSDK-${MONO}-Linux-x64-${BT}")              DEST="Mono/Linux/x64" ;;
-              "MonoSDK-${MONO}-Windows-x64-${BT}")            DEST="Mono/Win64/x64" ;;
-              "MonoSDK-${MONO}-macOS-x64-${BT}")              DEST="Mono/Mac/x64" ;;
-              "MonoSDK-${MONO}-macOS-arm64-${BT}")            DEST="Mono/Mac/arm64" ;;
-              "MonoSDK-${MONO}-Android-arm64-${BT}")          DEST="Mono/Android/arm64" ;;
-              "MonoSDK-${MONO}-iOS-arm64-${BT}")              DEST="Mono/IOS/arm64" ;;
-              "MonoSDK-${MONO}-iOS-Simulator-arm64-${BT}")    DEST="Mono/IOSSimulator/arm64" ;;
-              "CoreClrSDK-${CLR}-Android-arm64-${BT}")        DEST="CoreCLR/Android/arm64" ;;
-              "CoreClrSDK-${CLR}-iOS-arm64-${BT}")            DEST="CoreCLR/IOS/arm64" ;;
-              "CoreClrSDK-${CLR}-iOS-Simulator-arm64-${BT}")  DEST="CoreCLR/IOSSimulator/arm64" ;;
+              "MonoSDK-r${RUN_NUM}-${MONO}-Linux-x64-${BT}")              DEST="Mono/Linux/x64" ;;
+              "MonoSDK-r${RUN_NUM}-${MONO}-Windows-x64-${BT}")            DEST="Mono/Win64/x64" ;;
+              "MonoSDK-r${RUN_NUM}-${MONO}-macOS-x64-${BT}")              DEST="Mono/Mac/x64" ;;
+              "MonoSDK-r${RUN_NUM}-${MONO}-macOS-arm64-${BT}")            DEST="Mono/Mac/arm64" ;;
+              "MonoSDK-r${RUN_NUM}-${MONO}-Android-arm64-${BT}")          DEST="Mono/Android/arm64" ;;
+              "MonoSDK-r${RUN_NUM}-${MONO}-iOS-arm64-${BT}")              DEST="Mono/IOS/arm64" ;;
+              "MonoSDK-r${RUN_NUM}-${MONO}-iOS-Simulator-arm64-${BT}")    DEST="Mono/IOSSimulator/arm64" ;;
+              "CoreClrSDK-r${RUN_NUM}-${CLR}-Android-arm64-${BT}")        DEST="CoreCLR/Android/arm64" ;;
+              "CoreClrSDK-r${RUN_NUM}-${CLR}-iOS-arm64-${BT}")            DEST="CoreCLR/IOS/arm64" ;;
+              "CoreClrSDK-r${RUN_NUM}-${CLR}-iOS-Simulator-arm64-${BT}")  DEST="CoreCLR/IOSSimulator/arm64" ;;
               *) echo "ERROR: unexpected artifact '$NAME' - refusing to package" >&2; exit 1 ;;
             esac
             mkdir -p "package/$DEST"
@@ -128,9 +130,10 @@ jobs:
       - name: Zip per backend
         run: |
           set -euo pipefail
+          RUN_NUM="${{ steps.run.outputs.num }}"
           cd package
-          zip -X -y -q -r "MonoSDK-${{ github.event.inputs.version }}-${{ github.event.inputs.build_type }}.zip" Mono
-          zip -X -y -q -r "CoreClrSDK-${{ github.event.inputs.version }}-${{ github.event.inputs.build_type }}.zip" CoreCLR
+          zip -X -y -q -r "MonoSDK-${{ github.event.inputs.version }}-r${RUN_NUM}-${{ github.event.inputs.build_type }}.zip" Mono
+          zip -X -y -q -r "CoreClrSDK-${{ github.event.inputs.version }}-r${RUN_NUM}-${{ github.event.inputs.build_type }}.zip" CoreCLR
           shasum -a 256 *.zip > SHA256SUMS.txt
           ls -la *.zip SHA256SUMS.txt
 
@@ -141,17 +144,17 @@ jobs:
           name: ${{ github.event.inputs.version }}
           body: |
             ## Contents
-            - `MonoSDK-${{ github.event.inputs.version }}-${{ github.event.inputs.build_type }}.zip` — Mono payloads (Win64, Mac x64/arm64, Linux, Android, iOS, iOS Simulator) + shared include/
-            - `CoreClrSDK-${{ github.event.inputs.version }}-${{ github.event.inputs.build_type }}.zip` — CoreCLR payloads (Android, iOS, iOS Simulator) + host headers in each payload's include/
+            - `MonoSDK-${{ github.event.inputs.version }}-r${{ steps.run.outputs.num }}-${{ github.event.inputs.build_type }}.zip` — Mono payloads (Win64, Mac x64/arm64, Linux, Android, iOS, iOS Simulator) + shared include/
+            - `CoreClrSDK-${{ github.event.inputs.version }}-r${{ steps.run.outputs.num }}-${{ github.event.inputs.build_type }}.zip` — CoreCLR payloads (Android, iOS, iOS Simulator) + host headers in each payload's include/
 
             ## Build Info
             Build type: ${{ github.event.inputs.build_type }}
-            build-all run: [${{ steps.run.outputs.id }}](https://github.com/${{ github.repository }}/actions/runs/${{ steps.run.outputs.id }}) (commit ${{ steps.run.outputs.sha }})
+            build-all run: [#${{ steps.run.outputs.num }}](https://github.com/${{ github.repository }}/actions/runs/${{ steps.run.outputs.id }}) (commit ${{ steps.run.outputs.sha }})
             Mono source: https://github.com/dotnet/runtime.git (${{ steps.pins.outputs.mono }})
             CoreCLR source: https://github.com/dotnet/runtime.git (${{ steps.pins.outputs.clr }})
           files: |
-            package/MonoSDK-${{ github.event.inputs.version }}-${{ github.event.inputs.build_type }}.zip
-            package/CoreClrSDK-${{ github.event.inputs.version }}-${{ github.event.inputs.build_type }}.zip
+            package/MonoSDK-${{ github.event.inputs.version }}-r${{ steps.run.outputs.num }}-${{ github.event.inputs.build_type }}.zip
+            package/CoreClrSDK-${{ github.event.inputs.version }}-r${{ steps.run.outputs.num }}-${{ github.event.inputs.build_type }}.zip
             package/SHA256SUMS.txt
           draft: false
           prerelease: false

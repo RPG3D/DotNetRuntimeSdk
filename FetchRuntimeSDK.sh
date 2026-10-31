@@ -81,10 +81,18 @@ log "Release: $TAG  backends: $BACKENDS"
 
 for BACKEND in $BACKENDS; do
   case "$BACKEND" in
-    mono)    ASSET="MonoSDK-${TAG}-Release.zip"    ;;
-    coreclr) ASSET="CoreClrSDK-${TAG}-Release.zip" ;;
+    mono)    PREFIX="MonoSDK"    ;;
+    coreclr) PREFIX="CoreClrSDK" ;;
   esac
+  # Asset names embed the build run number (MonoSDK-<ver>-r<n>-Release.zip), so
+  # resolve by listing the release's assets and matching the backend prefix —
+  # exactly one asset per backend lives in a release.
+  ASSET="$(curl -s --retry 3 --retry-delay 5 "https://api.github.com/repos/$REPO/releases/tags/$TAG" \
+    | python3 -c "import json,sys; print(' '.join(a['name'] for a in json.load(sys.stdin).get('assets', [])))" \
+    | tr ' ' '\n' | grep "^${PREFIX}-" | head -1)"
+  [ -n "$ASSET" ] || { echo "ERROR: no $PREFIX asset found in release $TAG" >&2; exit 1; }
   ZIP="$WORK_DIR/$ASSET"
+  log "Asset: $ASSET"
   log "Downloading $ASSET"
 
   # ── Download (resumable + retried) ──────────────────────────────────────
