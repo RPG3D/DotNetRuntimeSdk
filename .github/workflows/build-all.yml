@@ -72,9 +72,11 @@ on:
 permissions:
   contents: write
 
+# Do NOT cancel-in-progress: legs are independently dispatchable, and a follow-up
+# dispatch (e.g. rerunning one failed leg) must not kill the in-flight run.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   # ─────────────────────────────────────────────────────────────────────── MONO ──
