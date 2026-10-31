@@ -11,6 +11,13 @@ name: Build DotNetRuntimeSDK - All Platforms
 #
 # Legs are independently dispatchable: Mono follows the 10.0.x servicing cadence while
 # CoreCLR follows 11, so bumping one backend must not rebuild the other.
+#
+# Release atomicity: package-release can only consume artifacts of ONE run (artifact
+# names embed r<run_number>). A version therefore ships only when ALL legs of one run
+# are green. A transient single-leg failure is recovered with
+# `gh run rerun <id> --failed` - same run_number, same provenance, and the failed leg
+# never uploaded an artifact, so the name cannot collide. Rebuilding just one leg in a
+# NEW run (different r-number) can NOT be merged into the old run by design.
 
 on:
   workflow_dispatch:
