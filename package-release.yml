@@ -1,0 +1,85 @@
+name: Package DotNetRuntimeSDK Release
+
+# Assembles a GitHub Release from the artifacts of a build-all run: one zip per
+# backend+platform, so consumers fetch only what they need (FetchRuntimeSDK.sh).
+# The release notes record the exact dotnet/runtime pins from DotNetRuntime.version.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v0.1.0)'
+        required: true
+        default: 'v0.1.0'
+        type: string
+      run_id:
+        description: 'build-all run id to package (empty = latest successful)'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  MONO_TAG_HINT: "see DotNetRuntime.version MONO_SOURCE_TAG"
+  CLR_TAG_HINT: "see DotNetRuntime.version SOURCE_TAG"
+
+jobs:
+  package:
+    runs-on: macos-26
+    steps:
+      - name: Checkout DotNetRuntimeSDK
+        uses: actions/checkout@v4
+
+      - name: Resolve run id
+        id: run
+        run: |
+          RUN_ID="${{ github.event.inputs.run_id }}"
+          if [ -z "$RUN_ID" ]; then
+            RUN_ID="$(gh run list -R "$GITHUB_REPOSITORY" -w build-all.yml -s success -L 1 --json databaseId --jq '.[0].databaseId')"
+          fi
+          echo "id=$RUN_ID" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Download all build artifacts
+        run: |
+          gh run download "${{ steps.run.outputs.id }}" -R "$GITHUB_REPOSITORY" -D artifacts
+          mkdir -p package
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Zip per backend+platform
+        run: |
+          cd artifacts
+          for DIR in */; do
+            NAME="${DIR%/}"
+            (cd "$DIR" && zip -X -y -q -r "../package/${NAME}.zip" .)
+          done
+          cd ..
+          ls -la package/
+
+      - name: Read pins for release notes
+        id: pins
+        run: |
+          echo "mono=$(grep -E '^MONO_SOURCE_TAG=' DotNetRuntime.version | cut -d= -f2- | tr -d '\r')" >> "$GITHUB_OUTPUT"
+          echo "clr=$(grep -E '^SOURCE_TAG=' DotNetRuntime.version | cut -d= -f2- | tr -d '\r')" >> "$GITHUB_OUTPUT"
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.version }}
+          name: ${{ github.event.inputs.version }}
+          body: |
+            ## Contents
+            - Mono payloads (7 platforms) + CoreCLR payloads (3 mobile platforms)
+
+            ## Build Info
+            Mono source: https://github.com/dotnet/runtime.git (${{ steps.pins.outputs.mono }})
+            CoreCLR source: https://github.com/dotnet/runtime.git (${{ steps.pins.outputs.clr }})
+            Build date: ${{ github.event.inputs.version }}
+          files: |
+            package/*.zip
+          draft: false
+          prerelease: false

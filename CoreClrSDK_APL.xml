@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- CoreClrSDK Android Plugin Language file
+     Copies CoreCLR runtime .so files into the APK lib/arm64-v8a/ directory so the
+     OS linker loads them at install. libcoreclr.so is compile-time linked by the
+     C++ host (CoreClrSDK.Build.cs PublicAdditionalLibraries) and called directly
+     via the coreclrhost.h prototypes — no runtime dlopen / GetDllExport.
+
+     Path note: $S(PluginDir) resolves to the directory containing this APL file,
+     which is Source/ThirdParty/CoreClrSDK/ inside the UnrealSharp plugin root.
+     All CoreCLR native artifacts live under Android/arm64/lib/ relative to this dir.
+
+     Modeled on MonoSDK_APL.xml. dst uses $S(BuildDir)/libs/ (not jni/) — Gradle
+     stages .so files from libs/ into the APK. -->
+<root xmlns:android="http://schemas.android.com/apk/res/android">
+
+  <init>
+    <log text="UnrealSharp CoreClrSDK: init"/>
+    <setBool result="bArm64" value="false"/>
+    <isArch arch="arm64-v8a">
+      <setBool result="bArm64" value="true"/>
+    </isArch>
+  </init>
+
+  <!-- Copy CoreCLR runtime .so files into the Gradle lib directory so they land
+       inside APK/lib/arm64-v8a/ and are extracted to the device lib dir at install. -->
+  <resourceCopies>
+    <if condition="bArm64">
+      <true>
+        <!-- CoreCLR runtime + JIT -->
+        <copyDir src="$S(PluginDir)/CoreCLR/Android/arm64/lib/"
+                  dst="$S(BuildDir)/libs/arm64-v8a/" />
+
+        <log text="UnrealSharp CoreClrSDK: copied CoreClr sdk files"/>
+      </true>
+    </if>
+  </resourceCopies>
+
+  <!-- Load libcoreclr.so before libUnreal.so so its symbols are resolvable. -->
+  <soLoadLibrary>
+    <if condition="bArm64">
+      <true>
+        <loadLibrary name="coreclr" failmsg="CoreCLR runtime library (libcoreclr.so) not found!"/>
+      </true>
+    </if>
+  </soLoadLibrary>
+
+</root>

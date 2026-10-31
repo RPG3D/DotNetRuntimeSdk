@@ -1,0 +1,410 @@
+name: Build DotNetRuntimeSDK - All Platforms
+
+# Builds every runtime payload the plugin consumes, from the dotnet/runtime refs pinned
+# in DotNetRuntime.version:
+#   mono    (7 legs): linux, windows, macos-x64, macos-arm64, android, ios, iossimulator
+#   coreclr (3 legs): android, ios, iossimulator   (desktop CoreCLR = upstream hostfxr)
+#
+# Each leg uploads its payload directory as an artifact; unpack the artifacts over this
+# directory (Mono/... and CoreCLR/...). package-release.yml turns the artifacts into a
+# GitHub Release for FetchRuntimeSDK.sh.
+#
+# Legs are independently dispatchable: Mono follows the 10.0.x servicing cadence while
+# CoreCLR follows 11, so bumping one backend must not rebuild the other.
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type'
+        required: true
+        default: 'Release'
+        type: choice
+        options:
+          - Debug
+          - Release
+      build_mono_linux:
+        description: 'Mono: Linux x64'
+        required: false
+        type: boolean
+        default: true
+      build_mono_windows:
+        description: 'Mono: Windows x64'
+        required: false
+        type: boolean
+        default: true
+      build_mono_macos:
+        description: 'Mono: macOS x64 + arm64'
+        required: false
+        type: boolean
+        default: true
+      build_mono_android:
+        description: 'Mono: Android arm64'
+        required: false
+        type: boolean
+        default: true
+      build_mono_ios:
+        description: 'Mono: iOS device + Simulator arm64'
+        required: false
+        type: boolean
+        default: true
+      build_clr_android:
+        description: 'CoreCLR: Android arm64'
+        required: false
+        type: boolean
+        default: true
+      build_clr_ios:
+        description: 'CoreCLR: iOS device arm64'
+        required: false
+        type: boolean
+        default: true
+      build_clr_iossimulator:
+        description: 'CoreCLR: iOS Simulator arm64'
+        required: false
+        type: boolean
+        default: true
+      clr_runtime_commit:
+        description: 'CoreCLR: dotnet/runtime commit override (empty = SOURCE_TAG)'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────── MONO ──
+
+  mono-linux:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.build_mono_linux == 'true'
+    steps:
+      - name: Checkout DotNetRuntimeSDK
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build clang libicu-dev libssl-dev libkrb5-dev
+
+      - name: Clone dotnet/runtime
+        run: |
+          RUNTIME_TAG="$(grep -E '^MONO_SOURCE_TAG=' DotNetRuntime.version | cut -d= -f2- | tr -d '\r')"
+          echo "Pinning mono source to $RUNTIME_TAG"
+          git clone --depth 1 --branch "$RUNTIME_TAG" https://github.com/dotnet/runtime.git dotnet-runtime
+
+      - name: Build MonoSDK (Linux)
+        run: |
+          chmod +x BuildMonoSDK.sh CopyMonoSDKFromSrc.sh
+          ./BuildMonoSDK.sh $(pwd)/dotnet-runtime linux ${{ github.event.inputs.build_type || 'Debug' }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: MonoSDK-Linux-x64-${{ github.event.inputs.build_type || 'Debug' }}
+          path: Mono/Linux/x64/
+          retention-days: 30
+          if-no-files-found: error
+
+  mono-windows:
+    runs-on: windows-2022
+    if: github.event.inputs.build_mono_windows == 'true'
+    steps:
+      - name: Checkout DotNetRuntimeSDK
+        uses: actions/checkout@v4
+
+      - name: Clone dotnet/runtime
+        run: |
+          RUNTIME_TAG="$(grep -E '^MONO_SOURCE_TAG=' DotNetRuntime.version | cut -d= -f2- | tr -d '\r')"
+          echo "Pinning mono source to $RUNTIME_TAG"
+          git clone --depth 1 --branch "$RUNTIME_TAG" https://github.com/dotnet/runtime.git dotnet-runtime
+        shell: bash
+
+      - name: Build MonoSDK (Windows)
+        run: |
+          BuildMonoSDK.bat %CD%\dotnet-runtime ${{ github.event.inputs.build_type || 'Debug' }}
+        shell: cmd
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: MonoSDK-Windows-x64-${{ github.event.inputs.build_type || 'Debug' }}
+          path: Mono/Win64/x64/
+          retention-days: 30
+          if-no-files-found: error
+
+  mono-macos-arm64:
+    # Native build on the Apple Silicon runner -> Mac/arm64.
+    if: github.event.inputs.build_mono_macos == 'true'
+    runs-on: macos-26
+    steps:
+      - name: Checkout DotNetRuntimeSDK
+        uses: actions/checkout@v4
+
+      - name: Clone dotnet/runtime
+        run: |
+          RUNTIME_TAG="$(grep -E '^MONO_SOURCE_TAG=' DotNetRuntime.version | cut -d= -f2- | tr -d '\r')"
+          echo "Pinning mono source to $RUNTIME_TAG"
+          git clone --depth 1 --branch "$RUNTIME_TAG" https://github.com/dotnet/runtime.git dotnet-runtime
+
+      - name: Build MonoSDK (macOS arm64)
+        run: |
+          chmod +x BuildMonoSDK.sh CopyMonoSDKFromSrc.sh
+          ./BuildMonoSDK.sh $(pwd)/dotnet-runtime macos ${{ github.event.inputs.build_type || 'Debug' }} arm64
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: MonoSDK-macOS-arm64-${{ github.event.inputs.build_type || 'Debug' }}
+          path: Mono/Mac/arm64/
+          retention-days: 30
+          if-no-files-found: error
+
+  mono-macos-x64:
+    # Cross-arch build (-arch x64) on the Apple Silicon runner -> Mac/x64. The Intel
+    # runners are markedly slower than macos-26, and the managed half of the build is
+    # arch-independent anyway; dotnet/runtime handles the native cross compile via
+    # CMAKE_OSX_ARCHITECTURES. If this leg ever misbehaves, move it back to
+    # macos-26-intel for a native build.
+    if: github.event.inputs.build_mono_macos == 'true'
+    runs-on: macos-26
+    steps:
+      - name: Checkout DotNetRuntimeSDK
+        uses: actions/checkout@v4
+
+      - name: Clone dotnet/runtime
+        run: |
+          RUNTIME_TAG="$(grep -E '^MONO_SOURCE_TAG=' DotNetRuntime.version | cut -d= -f2- | tr -d '\r')"
+          echo "Pinning mono source to $RUNTIME_TAG"
+          git clone --depth 1 --branch "$RUNTIME_TAG" https://github.com/dotnet/runtime.git dotnet-runtime
+
+      - name: Build MonoSDK (macOS x64)
+        run: |
+          chmod +x BuildMonoSDK.sh CopyMonoSDKFromSrc.sh
+          ./BuildMonoSDK.sh $(pwd)/dotnet-runtime macos ${{ github.event.inputs.build_type || 'Debug' }} x64
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: MonoSDK-macOS-x64-${{ github.event.inputs.build_type || 'Debug' }}
+          path: Mono/Mac/x64/
+          retention-days: 30
+          if-no-files-found: error
+
+  mono-ios:
+    runs-on: macos-26
+    if: github.event.inputs.build_mono_ios == 'true'
+    steps:
+      - name: Checkout DotNetRuntimeSDK
+        uses: actions/checkout@v4
+
+      - name: Clone dotnet/runtime
+        run: |
+          RUNTIME_TAG="$(grep -E '^MONO_SOURCE_TAG=' DotNetRuntime.version | cut -d= -f2- | tr -d '\r')"
+          echo "Pinning mono source to $RUNTIME_TAG"
+          git clone --depth 1 --branch "$RUNTIME_TAG" https://github.com/dotnet/runtime.git dotnet-runtime
+
+      - name: Build MonoSDK (iOS)
+        run: |
+          chmod +x BuildMonoSDK.sh CopyMonoSDKFromSrc.sh MakeMonoFramework.sh
+          ./BuildMonoSDK.sh $(pwd)/dotnet-runtime ios ${{ github.event.inputs.build_type || 'Debug' }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: MonoSDK-iOS-arm64-${{ github.event.inputs.build_type || 'Debug' }}
+          path: Mono/IOS/arm64/
+          retention-days: 30
+          if-no-files-found: error
+
+  mono-iossimulator-arm64:
+    # Native build on the Apple Silicon runner -> IOSSimulator/arm64. UE 5.7 builds the
+    # simulator for arm64 only; the x64 SDK is for toolchains that still support it.
+    if: github.event.inputs.build_mono_ios == 'true'
+    runs-on: macos-26
+    steps:
+      - name: Checkout DotNetRuntimeSDK
+        uses: actions/checkout@v4
+
+      - name: Clone dotnet/runtime
+        run: |
+          RUNTIME_TAG="$(grep -E '^MONO_SOURCE_TAG=' DotNetRuntime.version | cut -d= -f2- | tr -d '\r')"
+          echo "Pinning mono source to $RUNTIME_TAG"
+          git clone --depth 1 --branch "$RUNTIME_TAG" https://github.com/dotnet/runtime.git dotnet-runtime
+
+      - name: Build MonoSDK (iOS Simulator arm64)
+        run: |
+          chmod +x BuildMonoSDK.sh CopyMonoSDKFromSrc.sh MakeMonoFramework.sh
+          ./BuildMonoSDK.sh $(pwd)/dotnet-runtime iossimulator ${{ github.event.inputs.build_type || 'Debug' }} arm64
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: MonoSDK-iOS-Simulator-arm64-${{ github.event.inputs.build_type || 'Debug' }}
+          path: Mono/IOSSimulator/arm64/
+          retention-days: 30
+          if-no-files-found: error
+
+  mono-android:
+    runs-on: macos-26
+    if: github.event.inputs.build_mono_android == 'true'
+    steps:
+      - name: Checkout DotNetRuntimeSDK
+        uses: actions/checkout@v4
+
+      - name: Accept Android SDK licenses
+        # The macOS runner ships the Android SDK and NDK preinstalled. android-actions/
+        # setup-android fails on this image -- sdkmanager exits 1 with "Failed to find
+        # package 'tools'", the obsolete package it still tries to install -- so accept
+        # the licenses against the preinstalled SDK directly instead.
+        run: |
+          ANDROID_SDK_ROOT="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          ls "$ANDROID_SDK_ROOT" > /dev/null
+          yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+          echo "Licenses accepted."
+
+      - name: Clone dotnet/runtime
+        run: |
+          RUNTIME_TAG="$(grep -E '^MONO_SOURCE_TAG=' DotNetRuntime.version | cut -d= -f2- | tr -d '\r')"
+          echo "Pinning mono source to $RUNTIME_TAG"
+          git clone --depth 1 --branch "$RUNTIME_TAG" https://github.com/dotnet/runtime.git dotnet-runtime
+
+      - name: Build MonoSDK (Android)
+        run: |
+          chmod +x BuildMonoSDK.sh CopyMonoSDKFromSrc.sh
+          ./BuildMonoSDK.sh $(pwd)/dotnet-runtime android ${{ github.event.inputs.build_type || 'Debug' }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: MonoSDK-Android-arm64-${{ github.event.inputs.build_type || 'Debug' }}
+          path: Mono/Android/arm64/
+          retention-days: 30
+          if-no-files-found: error
+
+  # ──────────────────────────────────────────────────────────────────── CORECLR ──
+
+  clr-android:
+    runs-on: macos-26
+    if: github.event.inputs.build_clr_android == 'true'
+    steps:
+      - name: Checkout DotNetRuntimeSDK
+        uses: actions/checkout@v4
+
+      - name: Select Android NDK
+        run: |
+          set -euo pipefail
+          NDK_DIR="$(ls -d "$ANDROID_HOME"/ndk/* 2>/dev/null | sort -V | tail -1)"
+          if [ -z "$NDK_DIR" ]; then
+            echo "No NDK found under ANDROID_HOME ($ANDROID_HOME)" >&2
+            exit 1
+          fi
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=$NDK_DIR" >> "$GITHUB_ENV"
+          echo "Using NDK: $NDK_DIR"
+
+      - name: Clone dotnet/runtime
+        run: |
+          RUNTIME_TAG="$(grep -E '^SOURCE_TAG=' DotNetRuntime.version | cut -d= -f2- | tr -d '\r')"
+          if [ -z "$RUNTIME_TAG" ]; then
+            echo "SOURCE_TAG missing in DotNetRuntime.version" >&2
+            exit 1
+          fi
+          echo "Pinning coreclr source to $RUNTIME_TAG"
+          RUNTIME_COMMIT="${{ github.event.inputs.clr_runtime_commit }}"
+          git clone --depth 1 --branch "$RUNTIME_TAG" https://github.com/dotnet/runtime.git dotnet-runtime
+          if [ -n "$RUNTIME_COMMIT" ]; then
+            cd dotnet-runtime
+            git fetch --depth=100 origin "$RUNTIME_COMMIT"
+            git checkout "$RUNTIME_COMMIT"
+          fi
+
+      - name: Build CoreClrSDK (Android arm64)
+        run: |
+          chmod +x BuildCoreClrSDK.sh CopyCoreClrSDKFromSrc.sh
+          ./BuildCoreClrSDK.sh "$(pwd)/dotnet-runtime" android ${{ github.event.inputs.build_type || 'Release' }} arm64
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: CoreClrSDK-Android-arm64-${{ github.event.inputs.build_type || 'Release' }}
+          path: CoreCLR/Android/arm64/
+          retention-days: 30
+          if-no-files-found: error
+
+  clr-ios:
+    runs-on: macos-26
+    if: github.event.inputs.build_clr_ios == 'true'
+    steps:
+      - name: Checkout DotNetRuntimeSDK
+        uses: actions/checkout@v4
+
+      - name: Clone dotnet/runtime
+        run: |
+          RUNTIME_TAG="$(grep -E '^SOURCE_TAG=' DotNetRuntime.version | cut -d= -f2- | tr -d '\r')"
+          if [ -z "$RUNTIME_TAG" ]; then
+            echo "SOURCE_TAG missing in DotNetRuntime.version" >&2
+            exit 1
+          fi
+          echo "Pinning coreclr source to $RUNTIME_TAG"
+          RUNTIME_COMMIT="${{ github.event.inputs.clr_runtime_commit }}"
+          git clone --depth 1 --branch "$RUNTIME_TAG" https://github.com/dotnet/runtime.git dotnet-runtime
+          if [ -n "$RUNTIME_COMMIT" ]; then
+            cd dotnet-runtime
+            git fetch --depth=100 origin "$RUNTIME_COMMIT"
+            git checkout "$RUNTIME_COMMIT"
+          fi
+
+      - name: Build CoreClrSDK (iOS device arm64)
+        run: |
+          chmod +x BuildCoreClrSDK.sh CopyCoreClrSDKFromSrc.sh MakeCoreClrFramework.sh
+          ./BuildCoreClrSDK.sh "$(pwd)/dotnet-runtime" ios ${{ github.event.inputs.build_type || 'Release' }} arm64
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: CoreClrSDK-iOS-arm64-${{ github.event.inputs.build_type || 'Release' }}
+          path: CoreCLR/IOS/arm64/
+          retention-days: 30
+          if-no-files-found: error
+
+  clr-iossimulator:
+    runs-on: macos-26
+    if: github.event.inputs.build_clr_iossimulator == 'true'
+    steps:
+      - name: Checkout DotNetRuntimeSDK
+        uses: actions/checkout@v4
+
+      - name: Clone dotnet/runtime
+        run: |
+          RUNTIME_TAG="$(grep -E '^SOURCE_TAG=' DotNetRuntime.version | cut -d= -f2- | tr -d '\r')"
+          if [ -z "$RUNTIME_TAG" ]; then
+            echo "SOURCE_TAG missing in DotNetRuntime.version" >&2
+            exit 1
+          fi
+          echo "Pinning coreclr source to $RUNTIME_TAG"
+          RUNTIME_COMMIT="${{ github.event.inputs.clr_runtime_commit }}"
+          git clone --depth 1 --branch "$RUNTIME_TAG" https://github.com/dotnet/runtime.git dotnet-runtime
+          if [ -n "$RUNTIME_COMMIT" ]; then
+            cd dotnet-runtime
+            git fetch --depth=100 origin "$RUNTIME_COMMIT"
+            git checkout "$RUNTIME_COMMIT"
+          fi
+
+      - name: Build CoreClrSDK (iOS Simulator arm64)
+        run: |
+          chmod +x BuildCoreClrSDK.sh CopyCoreClrSDKFromSrc.sh MakeCoreClrFramework.sh
+          ./BuildCoreClrSDK.sh "$(pwd)/dotnet-runtime" iossimulator ${{ github.event.inputs.build_type || 'Release' }} arm64
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: CoreClrSDK-iOS-Simulator-arm64-${{ github.event.inputs.build_type || 'Release' }}
+          path: CoreCLR/IOSSimulator/arm64/
+          retention-days: 30
+          if-no-files-found: error

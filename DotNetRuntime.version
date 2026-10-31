@@ -1,0 +1,47 @@
+# ── Runtime version matrix (single source of truth for the CoreCLR payload) ────
+#
+# Rule: the dotnet/runtime branch is a property of the BACKEND, not of the platform.
+#   Mono    -> dotnet 10  (release/10.0): .NET 11 removed Mono from the coreclr tree
+#   CoreCLR -> dotnet 11  (release/11.0): .NET 10's iOS CoreCLR ships no interpreter
+# Managed assemblies stay on net10.0 for both backends: the 11 runtime hosts net10 IL
+# (verified on device, see Docs/rebuild/DOTNET-SDK-UNIFICATION-PLAN.md §4.0).
+# Mono's branch/TFM pins live in MonoSDK (BuildMonoSDK.sh: net10.0-<os>-<type>-<arch>).
+# CoreCLR is dotnet 11 on every platform. Android used to carry a tracked 10.0.12
+# exception (the payload the four-combo matrix was validated on); it was removed on
+# 2026-10-30 after the 11.0.0 payload passed the same B/D device runs.
+# The 10 payload is kept locally as Android/arm64.v006-net10.bak for rollback.
+# CopySDKFromSrc.sh resolves <KEY>_<PLATFORM> before <KEY>; CoreClrSDK.Build.cs reads
+# the same keys and refuses a payload whose VERSION.txt declares a different major.
+DOTNET_MAJOR=11
+DOTNET_TFM=net11.0
+RUNTIME_VERSION=11.0.0
+
+# ── Mono (backend-bound to dotnet 10; see the rule above) ──────────────────────
+# Consumed by the unified workflows (build-all.yml resolves the clone ref from
+# here) and by FetchRuntimeSDK.sh. BuildMonoSDK.sh keeps its net10.0-<os>-<type>
+# TFM strings hardcoded - they name dotnet/runtime artifact directories, not the
+# source version.
+MONO_SOURCE_TAG=v10.0.14
+MONO_DOTNET_MAJOR=10
+MONO_DOTNET_TFM=net10.0
+
+# The dotnet/runtime ref every build pins to (CI clones it directly; CopySDKFromSrc.sh
+# warns when a local worktree sits elsewhere). Update this one line to move all
+# platforms to a new source. v11.0.0 GA is not tagged yet, so 11 pins the newest RC —
+# switch to the GA tag when it lands.
+SOURCE_TAG=v11.0.0-rc.3.26522.148
+
+# Subsets the SDK actually consumes. CopySDKFromSrc.sh reads exactly these outputs:
+#   clr.runtime       libcoreclr / libclrjit / libclrinterpreter
+#   clr.corelib       pure-IL System.Private.CoreLib.dll (interpreter requirement)
+#   clr.nativecorelib R2R CoreLib input for the runtime pack
+#   libs.sfx          BCL managed assemblies + runtime-pack layout
+#   libs.native       System.Native / Compression / Globalization / Security shims
+#
+# Deliberately absent (all unused by the SDK, pure build time):
+#   clr.alljits       alt-JITs, only needed by JIT tests and ILCompiler
+#   clr.tools         ILCompiler / crossgen2 publish / ILVerify / ilasm / dotnet-pgo
+#   clr.packages      NuGet packaging of IL SDK / TestHost / ILAsm
+#   libs.oob          out-of-band libraries not in the shared framework
+#   libs.pretest      test infrastructure
+BUILD_SUBSET=clr.runtime+clr.corelib+clr.nativecorelib+libs.native+libs.sfx

@@ -1,0 +1,6 @@
+# SDK payloads are produced by CI (build-all.yml) or local build scripts - never committed.
+Mono/
+CoreCLR/
+.DS_Store
+*.bak
+.framework_sign_cache.txt
