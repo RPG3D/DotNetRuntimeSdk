@@ -73,6 +73,7 @@ jobs:
           BT="${{ github.event.inputs.build_type }}"
           MONO="${{ steps.pins.outputs.mono }}"
           CLR="${{ steps.pins.outputs.clr }}"
+          RUN_NUM="${{ steps.run.outputs.num }}"
           MISSING=""
           for NAME in \
             "MonoSDK-r${RUN_NUM}-${MONO}-Linux-x64-${BT}" \
@@ -105,6 +106,7 @@ jobs:
           BT="${{ github.event.inputs.build_type }}"
           MONO="${{ steps.pins.outputs.mono }}"
           CLR="${{ steps.pins.outputs.clr }}"
+          RUN_NUM="${{ steps.run.outputs.num }}"
           mkdir -p package/Mono package/CoreCLR
           # bash 3.2 safe: flat case on EXACT pinned names -> destination.
           for ART in artifacts/*/; do
