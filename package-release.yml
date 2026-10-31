@@ -2,15 +2,17 @@ name: Package DotNetRuntimeSDK Release
 
 # Assembles a GitHub Release from ONE build-all run's artifacts as TWO zips
 # (download on demand, one per backend):
-#   MonoSDK-<version>-Release.zip     Mono/{Win64,Mac,Linux,Android,IOS,IOSSimulator}/...
-#   CoreClrSDK-<version>-Release.zip  CoreCLR/{Android,IOS,IOSSimulator}/...
+#   MonoSDK-<version>-<build_type>.zip     Mono/{Win64,Mac,Linux,Android,IOS,IOSSimulator}/...
+#   CoreClrSDK-<version>-<build_type>.zip  CoreCLR/{Android,IOS,IOSSimulator}/...
 #
-# Artifact selection is strictly BY NAME and BY build type — never "latest of
-# everything": every one of the 10 expected artifact names must exist in the chosen
-# run with the requested build-type suffix, otherwise packaging FAILS. This keeps
-# semantically different builds (Debug vs Release, old pins vs new pins) from ever
-# being mixed into one SDK version. The release notes carry the run id, the workflow
-# commit and the dotnet/runtime pins for provenance.
+# Artifact selection is strict on THREE axes, so payloads from different dotnet/runtime
+# commits can never be mixed into one SDK version:
+#   1. run id       - one build-all run (one workflow commit, one DotNetRuntime.version)
+#   2. exact name   - artifact names embed the runtime pin (MonoSDK-<MONO_SOURCE_TAG>-...,
+#                     CoreClrSDK-<SOURCE_TAG>-...) resolved from THIS checkout of
+#                     DotNetRuntime.version; a stale-pin artifact fails the download
+#   3. build type   - exact -Release/-Debug suffix, never mixed
+# The release notes carry the run id, workflow commit and both runtime pins.
 
 on:
   workflow_dispatch:
@@ -37,17 +39,18 @@ on:
 permissions:
   contents: write
 
-env:
-  # backend -> artifact base names (exact; build-type suffix appended at download).
-  EXPECTED_MONO: "MonoSDK-Linux-x64 MonoSDK-Windows-x64 MonoSDK-macOS-x64 MonoSDK-macOS-arm64 MonoSDK-Android-arm64 MonoSDK-iOS-arm64 MonoSDK-iOS-Simulator-arm64"
-  EXPECTED_CLR: "CoreClrSDK-Android-arm64 CoreClrSDK-iOS-arm64 CoreClrSDK-iOS-Simulator-arm64"
-
 jobs:
   package:
     runs-on: macos-26
     steps:
       - name: Checkout DotNetRuntimeSDK
         uses: actions/checkout@v4
+
+      - name: Read pins from DotNetRuntime.version
+        id: pins
+        run: |
+          echo "mono=$(grep -E '^MONO_SOURCE_TAG=' DotNetRuntime.version | cut -d= -f2- | tr -d '\r')" >> "$GITHUB_OUTPUT"
+          echo "clr=$(grep -E '^SOURCE_TAG=' DotNetRuntime.version | cut -d= -f2- | tr -d '\r')" >> "$GITHUB_OUTPUT"
 
       - name: Resolve run id
         id: run
@@ -62,21 +65,33 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
-      - name: Download expected artifacts by exact name
+      - name: Download expected artifacts by pinned exact name
         run: |
           set -euo pipefail
           BT="${{ github.event.inputs.build_type }}"
+          MONO="${{ steps.pins.outputs.mono }}"
+          CLR="${{ steps.pins.outputs.clr }}"
           MISSING=""
-          for BASE in $EXPECTED_MONO $EXPECTED_CLR; do
-            NAME="${BASE}-${BT}"
+          for NAME in \
+            "MonoSDK-${MONO}-Linux-x64-${BT}" \
+            "MonoSDK-${MONO}-Windows-x64-${BT}" \
+            "MonoSDK-${MONO}-macOS-x64-${BT}" \
+            "MonoSDK-${MONO}-macOS-arm64-${BT}" \
+            "MonoSDK-${MONO}-Android-arm64-${BT}" \
+            "MonoSDK-${MONO}-iOS-arm64-${BT}" \
+            "MonoSDK-${MONO}-iOS-Simulator-arm64-${BT}" \
+            "CoreClrSDK-${CLR}-Android-arm64-${BT}" \
+            "CoreClrSDK-${CLR}-iOS-arm64-${BT}" \
+            "CoreClrSDK-${CLR}-iOS-Simulator-arm64-${BT}"; do
             if ! gh run download "${{ steps.run.outputs.id }}" -R "$GITHUB_REPOSITORY" \
                  -n "$NAME" -D "artifacts/$NAME"; then
               MISSING="$MISSING $NAME"
             fi
           done
           if [ -n "$MISSING" ]; then
-            echo "ERROR: run ${{ steps.run.outputs.id }} is missing artifacts:$MISSING" >&2
-            echo "Re-run those build-all legs (same run) or pick a complete run." >&2
+            echo "ERROR: run ${{ steps.run.outputs.id }} is missing (or has stale-pin) artifacts:$MISSING" >&2
+            echo "The artifact name embeds the runtime pin from DotNetRuntime.version; a" >&2
+            echo "mismatch means the run was built from a different pin - rebuild or pick another run." >&2
             exit 1
           fi
         env:
@@ -86,23 +101,24 @@ jobs:
         run: |
           set -euo pipefail
           BT="${{ github.event.inputs.build_type }}"
+          MONO="${{ steps.pins.outputs.mono }}"
+          CLR="${{ steps.pins.outputs.clr }}"
           mkdir -p package/Mono package/CoreCLR
-          # bash 3.2 safe: flat case from EXACT artifact names (build-type suffix
-          # verified, no wildcards) -> destination inside the backend layer.
+          # bash 3.2 safe: flat case on EXACT pinned names -> destination.
           for ART in artifacts/*/; do
             NAME="$(basename "$ART")"
             case "$NAME" in
-              MonoSDK-Linux-x64-$BT)                DEST="Mono/Linux/x64" ;;
-              MonoSDK-Windows-x64-$BT)              DEST="Mono/Win64/x64" ;;
-              MonoSDK-macOS-x64-$BT)                DEST="Mono/Mac/x64" ;;
-              MonoSDK-macOS-arm64-$BT)              DEST="Mono/Mac/arm64" ;;
-              MonoSDK-Android-arm64-$BT)            DEST="Mono/Android/arm64" ;;
-              MonoSDK-iOS-arm64-$BT)                DEST="Mono/IOS/arm64" ;;
-              MonoSDK-iOS-Simulator-arm64-$BT)      DEST="Mono/IOSSimulator/arm64" ;;
-              CoreClrSDK-Android-arm64-$BT)         DEST="CoreCLR/Android/arm64" ;;
-              CoreClrSDK-iOS-arm64-$BT)             DEST="CoreCLR/IOS/arm64" ;;
-              CoreClrSDK-iOS-Simulator-arm64-$BT)   DEST="CoreCLR/IOSSimulator/arm64" ;;
-              *) echo "ERROR: unexpected artifact '$NAME' (expected -$BT names) - refusing to package" >&2; exit 1 ;;
+              "MonoSDK-${MONO}-Linux-x64-${BT}")              DEST="Mono/Linux/x64" ;;
+              "MonoSDK-${MONO}-Windows-x64-${BT}")            DEST="Mono/Win64/x64" ;;
+              "MonoSDK-${MONO}-macOS-x64-${BT}")              DEST="Mono/Mac/x64" ;;
+              "MonoSDK-${MONO}-macOS-arm64-${BT}")            DEST="Mono/Mac/arm64" ;;
+              "MonoSDK-${MONO}-Android-arm64-${BT}")          DEST="Mono/Android/arm64" ;;
+              "MonoSDK-${MONO}-iOS-arm64-${BT}")              DEST="Mono/IOS/arm64" ;;
+              "MonoSDK-${MONO}-iOS-Simulator-arm64-${BT}")    DEST="Mono/IOSSimulator/arm64" ;;
+              "CoreClrSDK-${CLR}-Android-arm64-${BT}")        DEST="CoreCLR/Android/arm64" ;;
+              "CoreClrSDK-${CLR}-iOS-arm64-${BT}")            DEST="CoreCLR/IOS/arm64" ;;
+              "CoreClrSDK-${CLR}-iOS-Simulator-arm64-${BT}")  DEST="CoreCLR/IOSSimulator/arm64" ;;
+              *) echo "ERROR: unexpected artifact '$NAME' - refusing to package" >&2; exit 1 ;;
             esac
             mkdir -p "package/$DEST"
             cp -R "$ART." "package/$DEST/"
@@ -115,13 +131,8 @@ jobs:
           cd package
           zip -X -y -q -r "MonoSDK-${{ github.event.inputs.version }}-${{ github.event.inputs.build_type }}.zip" Mono
           zip -X -y -q -r "CoreClrSDK-${{ github.event.inputs.version }}-${{ github.event.inputs.build_type }}.zip" CoreCLR
-          ls -la *.zip
-
-      - name: Read pins for release notes
-        id: pins
-        run: |
-          echo "mono=$(grep -E '^MONO_SOURCE_TAG=' DotNetRuntime.version | cut -d= -f2- | tr -d '\r')" >> "$GITHUB_OUTPUT"
-          echo "clr=$(grep -E '^SOURCE_TAG=' DotNetRuntime.version | cut -d= -f2- | tr -d '\r')" >> "$GITHUB_OUTPUT"
+          shasum -a 256 *.zip > SHA256SUMS.txt
+          ls -la *.zip SHA256SUMS.txt
 
       - name: Create release
         uses: softprops/action-gh-release@v2
@@ -141,5 +152,6 @@ jobs:
           files: |
             package/MonoSDK-${{ github.event.inputs.version }}-${{ github.event.inputs.build_type }}.zip
             package/CoreClrSDK-${{ github.event.inputs.version }}-${{ github.event.inputs.build_type }}.zip
+            package/SHA256SUMS.txt
           draft: false
           prerelease: false

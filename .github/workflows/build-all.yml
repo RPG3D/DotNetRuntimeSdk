@@ -97,6 +97,7 @@ jobs:
         run: |
           RUNTIME_TAG="$(grep -E '^MONO_SOURCE_TAG=' DotNetRuntime.version | cut -d= -f2- | tr -d '\r')"
           echo "Pinning mono source to $RUNTIME_TAG"
+          echo "MONO_TAG=$RUNTIME_TAG" >> "$GITHUB_ENV"
           git clone --depth 1 --branch "$RUNTIME_TAG" https://github.com/dotnet/runtime.git dotnet-runtime
 
       - name: Build MonoSDK (Linux)
@@ -107,7 +108,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: MonoSDK-Linux-x64-${{ github.event.inputs.build_type || 'Debug' }}
+          name: MonoSDK-${{ env.MONO_TAG }}-Linux-x64-${{ github.event.inputs.build_type || 'Debug' }}
           path: Mono/Linux/x64/
           retention-days: 30
           if-no-files-found: error
@@ -126,6 +127,7 @@ jobs:
           git config --global core.longpaths true
           RUNTIME_TAG="$(grep -E '^MONO_SOURCE_TAG=' DotNetRuntime.version | cut -d= -f2- | tr -d '\r')"
           echo "Pinning mono source to $RUNTIME_TAG"
+          echo "MONO_TAG=$RUNTIME_TAG" >> "$GITHUB_ENV"
           git clone --depth 1 --branch "$RUNTIME_TAG" https://github.com/dotnet/runtime.git dotnet-runtime
         shell: bash
 
@@ -137,7 +139,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: MonoSDK-Windows-x64-${{ github.event.inputs.build_type || 'Debug' }}
+          name: MonoSDK-${{ env.MONO_TAG }}-Windows-x64-${{ github.event.inputs.build_type || 'Debug' }}
           path: Mono/Win64/x64/
           retention-days: 30
           if-no-files-found: error
@@ -154,6 +156,7 @@ jobs:
         run: |
           RUNTIME_TAG="$(grep -E '^MONO_SOURCE_TAG=' DotNetRuntime.version | cut -d= -f2- | tr -d '\r')"
           echo "Pinning mono source to $RUNTIME_TAG"
+          echo "MONO_TAG=$RUNTIME_TAG" >> "$GITHUB_ENV"
           git clone --depth 1 --branch "$RUNTIME_TAG" https://github.com/dotnet/runtime.git dotnet-runtime
 
       - name: Build MonoSDK (macOS arm64)
@@ -164,7 +167,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: MonoSDK-macOS-arm64-${{ github.event.inputs.build_type || 'Debug' }}
+          name: MonoSDK-${{ env.MONO_TAG }}-macOS-arm64-${{ github.event.inputs.build_type || 'Debug' }}
           path: Mono/Mac/arm64/
           retention-days: 30
           if-no-files-found: error
@@ -185,6 +188,7 @@ jobs:
         run: |
           RUNTIME_TAG="$(grep -E '^MONO_SOURCE_TAG=' DotNetRuntime.version | cut -d= -f2- | tr -d '\r')"
           echo "Pinning mono source to $RUNTIME_TAG"
+          echo "MONO_TAG=$RUNTIME_TAG" >> "$GITHUB_ENV"
           git clone --depth 1 --branch "$RUNTIME_TAG" https://github.com/dotnet/runtime.git dotnet-runtime
 
       - name: Build MonoSDK (macOS x64)
@@ -195,7 +199,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: MonoSDK-macOS-x64-${{ github.event.inputs.build_type || 'Debug' }}
+          name: MonoSDK-${{ env.MONO_TAG }}-macOS-x64-${{ github.event.inputs.build_type || 'Debug' }}
           path: Mono/Mac/x64/
           retention-days: 30
           if-no-files-found: error
@@ -211,6 +215,7 @@ jobs:
         run: |
           RUNTIME_TAG="$(grep -E '^MONO_SOURCE_TAG=' DotNetRuntime.version | cut -d= -f2- | tr -d '\r')"
           echo "Pinning mono source to $RUNTIME_TAG"
+          echo "MONO_TAG=$RUNTIME_TAG" >> "$GITHUB_ENV"
           git clone --depth 1 --branch "$RUNTIME_TAG" https://github.com/dotnet/runtime.git dotnet-runtime
 
       - name: Build MonoSDK (iOS)
@@ -221,7 +226,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: MonoSDK-iOS-arm64-${{ github.event.inputs.build_type || 'Debug' }}
+          name: MonoSDK-${{ env.MONO_TAG }}-iOS-arm64-${{ github.event.inputs.build_type || 'Debug' }}
           path: Mono/IOS/arm64/
           retention-days: 30
           if-no-files-found: error
@@ -239,6 +244,7 @@ jobs:
         run: |
           RUNTIME_TAG="$(grep -E '^MONO_SOURCE_TAG=' DotNetRuntime.version | cut -d= -f2- | tr -d '\r')"
           echo "Pinning mono source to $RUNTIME_TAG"
+          echo "MONO_TAG=$RUNTIME_TAG" >> "$GITHUB_ENV"
           git clone --depth 1 --branch "$RUNTIME_TAG" https://github.com/dotnet/runtime.git dotnet-runtime
 
       - name: Build MonoSDK (iOS Simulator arm64)
@@ -249,7 +255,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: MonoSDK-iOS-Simulator-arm64-${{ github.event.inputs.build_type || 'Debug' }}
+          name: MonoSDK-${{ env.MONO_TAG }}-iOS-Simulator-arm64-${{ github.event.inputs.build_type || 'Debug' }}
           path: Mono/IOSSimulator/arm64/
           retention-days: 30
           if-no-files-found: error
@@ -277,6 +283,7 @@ jobs:
         run: |
           RUNTIME_TAG="$(grep -E '^MONO_SOURCE_TAG=' DotNetRuntime.version | cut -d= -f2- | tr -d '\r')"
           echo "Pinning mono source to $RUNTIME_TAG"
+          echo "MONO_TAG=$RUNTIME_TAG" >> "$GITHUB_ENV"
           git clone --depth 1 --branch "$RUNTIME_TAG" https://github.com/dotnet/runtime.git dotnet-runtime
 
       - name: Build MonoSDK (Android)
@@ -287,7 +294,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: MonoSDK-Android-arm64-${{ github.event.inputs.build_type || 'Debug' }}
+          name: MonoSDK-${{ env.MONO_TAG }}-Android-arm64-${{ github.event.inputs.build_type || 'Debug' }}
           path: Mono/Android/arm64/
           retention-days: 30
           if-no-files-found: error
@@ -321,6 +328,7 @@ jobs:
             exit 1
           fi
           echo "Pinning coreclr source to $RUNTIME_TAG"
+          echo "CORECLR_TAG=$RUNTIME_TAG" >> "$GITHUB_ENV"
           RUNTIME_COMMIT="${{ github.event.inputs.clr_runtime_commit }}"
           git clone --depth 1 --branch "$RUNTIME_TAG" https://github.com/dotnet/runtime.git dotnet-runtime
           if [ -n "$RUNTIME_COMMIT" ]; then
@@ -337,7 +345,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: CoreClrSDK-Android-arm64-${{ github.event.inputs.build_type || 'Release' }}
+          name: CoreClrSDK-${{ env.CORECLR_TAG }}-Android-arm64-${{ github.event.inputs.build_type || 'Release' }}
           path: CoreCLR/Android/arm64/
           retention-days: 30
           if-no-files-found: error
@@ -357,6 +365,7 @@ jobs:
             exit 1
           fi
           echo "Pinning coreclr source to $RUNTIME_TAG"
+          echo "CORECLR_TAG=$RUNTIME_TAG" >> "$GITHUB_ENV"
           RUNTIME_COMMIT="${{ github.event.inputs.clr_runtime_commit }}"
           git clone --depth 1 --branch "$RUNTIME_TAG" https://github.com/dotnet/runtime.git dotnet-runtime
           if [ -n "$RUNTIME_COMMIT" ]; then
@@ -373,7 +382,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: CoreClrSDK-iOS-arm64-${{ github.event.inputs.build_type || 'Release' }}
+          name: CoreClrSDK-${{ env.CORECLR_TAG }}-iOS-arm64-${{ github.event.inputs.build_type || 'Release' }}
           path: CoreCLR/IOS/arm64/
           retention-days: 30
           if-no-files-found: error
@@ -393,6 +402,7 @@ jobs:
             exit 1
           fi
           echo "Pinning coreclr source to $RUNTIME_TAG"
+          echo "CORECLR_TAG=$RUNTIME_TAG" >> "$GITHUB_ENV"
           RUNTIME_COMMIT="${{ github.event.inputs.clr_runtime_commit }}"
           git clone --depth 1 --branch "$RUNTIME_TAG" https://github.com/dotnet/runtime.git dotnet-runtime
           if [ -n "$RUNTIME_COMMIT" ]; then
@@ -409,7 +419,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: CoreClrSDK-iOS-Simulator-arm64-${{ github.event.inputs.build_type || 'Release' }}
+          name: CoreClrSDK-${{ env.CORECLR_TAG }}-iOS-Simulator-arm64-${{ github.event.inputs.build_type || 'Release' }}
           path: CoreCLR/IOSSimulator/arm64/
           retention-days: 30
           if-no-files-found: error
