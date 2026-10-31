@@ -119,6 +119,9 @@ jobs:
 
       - name: Clone dotnet/runtime
         run: |
+          # Windows: dotnet/runtime carries >260-char test file names and this repo's
+          # longer name pushes the workspace path over MAX_PATH - lift it.
+          git config --global core.longpaths true
           RUNTIME_TAG="$(grep -E '^MONO_SOURCE_TAG=' DotNetRuntime.version | cut -d= -f2- | tr -d '\r')"
           echo "Pinning mono source to $RUNTIME_TAG"
           git clone --depth 1 --branch "$RUNTIME_TAG" https://github.com/dotnet/runtime.git dotnet-runtime
