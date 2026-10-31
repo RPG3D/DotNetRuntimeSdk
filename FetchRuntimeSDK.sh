@@ -51,6 +51,25 @@ trap 'rm -rf "$WORK_DIR"' EXIT
 
 log() { echo "[$(date +%H:%M:%S)] $*"; }
 
+# Robust fetch: the host network here flaps between "direct works" and "proxy
+# required", so alternate strategies across attempts and remember the winner.
+CURL_WIN=""
+gh_curl() { # gh_curl <args...>  (all args forwarded to curl)
+    local attempt strategy
+    for attempt in 1 2 3 4; do
+        if [ $((attempt % 2)) -eq 1 ]; then
+            strategy="direct";  unset HTTPS_PROXY HTTP_PROXY
+        else
+            strategy="proxy";   export HTTPS_PROXY="${HTTPS_PROXY_FALLBACK:-http://127.0.0.1:10808}" HTTP_PROXY="$HTTPS_PROXY_FALLBACK"
+        fi
+        if curl -fL --retry 2 --retry-delay 3 -C - --connect-timeout 20 "$@"; then
+            CURL_WIN="$strategy"; return 0
+        fi
+        log "curl via $strategy failed (attempt $attempt)"
+    done
+    return 1
+}
+
 # ── Install per platform ──────────────────────────────────────────────────────
 # $1 = zip root that already holds the backend layer (Mono/... or CoreCLR/...)
 install_platform() { # $1=zip platform dir  $2=sdk dest dir (same layout)
@@ -61,7 +80,8 @@ install_platform() { # $1=zip platform dir  $2=sdk dest dir (same layout)
   fi
   # Sanity: payload must contain both the native runtime and the BCL.
   local nativeCount bclCount
-  nativeCount=$(find "$src" -name "lib" -type d -exec find {} \( -name "*.so" -o -name "*.dylib" \) \; 2>/dev/null | wc -l | tr -d ' ')
+  # Native binaries: .so/.dylib on unix-like targets, .dll+.lib on Windows.
+  nativeCount=$(find "$src" -name "lib" -type d -exec find {} \( -name "*.so" -o -name "*.dylib" -o -name "*.dll" -o -name "*.lib" \) \; 2>/dev/null | wc -l | tr -d ' ')
   bclCount=$(find "$src" -name "*.dll" 2>/dev/null | wc -l | tr -d ' ')
   [ "$nativeCount" -gt 0 ] && [ "$bclCount" -gt 0 ] || {
     echo "ERROR: $2 payload incomplete (native=$nativeCount bcl=$bclCount)" >&2; exit 1; }
@@ -73,8 +93,10 @@ install_platform() { # $1=zip platform dir  $2=sdk dest dir (same layout)
 
 if [ -z "$TAG" ]; then
   log "Resolving latest release tag..."
-  TAG=$(curl -s --retry 3 --retry-delay 5 "https://api.github.com/repos/$REPO/releases/latest" \
-    | python3 -c "import json,sys; print(json.load(sys.stdin)['tag_name'])")
+  LATEST="$WORK_DIR/latest.json"
+  gh_curl -s "https://api.github.com/repos/$REPO/releases/latest" -o "$LATEST" \
+    || { echo "ERROR: cannot resolve latest release (network)" >&2; exit 1; }
+  TAG=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['tag_name'])" "$LATEST")
   [ -n "$TAG" ] && [ "$TAG" != "None" ] || { echo "ERROR: cannot resolve latest tag (network?)" >&2; exit 1; }
 fi
 log "Release: $TAG  backends: $BACKENDS"
@@ -87,8 +109,10 @@ for BACKEND in $BACKENDS; do
   # Asset names embed the build run number (MonoSDK-<ver>-r<n>-Release.zip), so
   # resolve by listing the release's assets and matching the backend prefix —
   # exactly one asset per backend lives in a release.
-  ASSET="$(curl -s --retry 3 --retry-delay 5 "https://api.github.com/repos/$REPO/releases/tags/$TAG" \
-    | python3 -c "import json,sys; print(' '.join(a['name'] for a in json.load(sys.stdin).get('assets', [])))" \
+  LIST="$WORK_DIR/assets.json"
+  gh_curl -s "https://api.github.com/repos/$REPO/releases/tags/$TAG" -o "$LIST" \
+    || { echo "ERROR: cannot list release $TAG assets" >&2; exit 1; }
+  ASSET="$(python3 -c "import json,sys; print(' '.join(a['name'] for a in json.load(open(sys.argv[1])).get('assets', [])))" "$LIST" \
     | tr ' ' '\n' | grep "^${PREFIX}-" | head -1)"
   [ -n "$ASSET" ] || { echo "ERROR: no $PREFIX asset found in release $TAG" >&2; exit 1; }
   ZIP="$WORK_DIR/$ASSET"
@@ -97,9 +121,9 @@ for BACKEND in $BACKENDS; do
 
   # ── Download (resumable + retried) ──────────────────────────────────────
   URL="https://github.com/$REPO/releases/download/$TAG/$ASSET"
-  curl -fL --retry 5 --retry-delay 5 --retry-all-errors -C - \
-    --connect-timeout 30 --speed-time 60 --speed-limit 1024 \
-    -o "$ZIP" "$URL" || { echo "ERROR: download failed (proxy? set HTTPS_PROXY and retry)" >&2; exit 1; }
+  gh_curl -o "$ZIP" "$URL" \
+    || { echo "ERROR: download failed (direct+proxy both exhausted)" >&2; exit 1; }
+  log "Downloaded via $CURL_WIN"
 
   SIZE=$(stat -f%z "$ZIP" 2>/dev/null || stat -c%s "$ZIP")
   [ "$SIZE" -gt 10000000 ] || { echo "ERROR: $ASSET suspiciously small ($SIZE bytes)" >&2; exit 1; }
