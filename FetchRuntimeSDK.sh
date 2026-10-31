@@ -22,7 +22,7 @@
 
 set -euo pipefail
 
-REPO="RPG3D/DotNetRuntimeSDK"
+REPO="RPG3D/DotNetRuntimeSdk"
 TAG=""
 PLATFORM=""
 # No backend argument = download BOTH release assets (MonoSDK + CoreClrSDK).
