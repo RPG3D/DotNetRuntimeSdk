@@ -5,13 +5,16 @@
 #   CoreCLR -> dotnet 11  (release/11.0): .NET 10's iOS CoreCLR ships no interpreter
 # Managed assemblies stay on net10.0 for both backends: the 11 runtime hosts net10 IL
 # (verified on device, see Docs/rebuild/DOTNET-SDK-UNIFICATION-PLAN.md §4.0).
-# Mono's branch/TFM pins live in MonoSDK (BuildMonoSDK.sh: net10.0-<os>-<type>-<arch>).
+# Mono's pins live here (MONO_SOURCE_TAG below); BuildMonoSDK.sh keeps its
+# net10.0-<os>-<type>-<arch> TFM strings - they name artifact dirs, not the source.
 # CoreCLR is dotnet 11 on every platform. Android used to carry a tracked 10.0.12
 # exception (the payload the four-combo matrix was validated on); it was removed on
 # 2026-10-30 after the 11.0.0 payload passed the same B/D device runs.
-# The 10 payload is kept locally as Android/arm64.v006-net10.bak for rollback.
-# CopySDKFromSrc.sh resolves <KEY>_<PLATFORM> before <KEY>; CoreClrSDK.Build.cs reads
-# the same keys and refuses a payload whose VERSION.txt declares a different major.
+# The previous 10.0.12 payload is recoverable from the old CoreClrSDK releases
+# (FetchRuntimeSDK from tag v0.0.x of the archived repo) - no local backup needed.
+# CopyCoreClrSDKFromSrc.sh resolves <KEY>_<PLATFORM> before <KEY>;
+# DotNetRuntimeSDK.Build.cs reads the same keys and refuses a payload whose
+# VERSION.txt declares a different major.
 DOTNET_MAJOR=11
 DOTNET_TFM=net11.0
 RUNTIME_VERSION=11.0.0

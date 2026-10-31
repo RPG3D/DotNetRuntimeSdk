@@ -61,7 +61,7 @@ rem     include\  (shared mono headers)
 set "SRC_ARTIFACTS=%DOTNET_SRC%\artifacts"
 set "MONO_TRIPLE=windows.x64.%BUILD_TYPE%"
 set "RUNTIME_TFM=net10.0-windows-%BUILD_TYPE%-x64"
-set "DEST=%SDK_DIR%\Win64"
+set "DEST=%SDK_DIR%\Mono\Win64"
 
 if exist "%DEST%" rmdir /s /q "%DEST%"
 mkdir "%DEST%"
